@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Environment Variables
+.env
+*/.env
+.env.local
+
+# Build output
+dist/
+build/
+*/dist/
+*/build/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Video recordings (exceeds GitHub 100MB file limit)
+*.mp4
+*.mkv
+*.mov
+
+# OS / Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

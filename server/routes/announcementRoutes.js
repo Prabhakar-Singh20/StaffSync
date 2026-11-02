@@ -1,0 +1,19 @@
+const express = require("express");
+const router = express.Router();
+const {
+  getAnnouncements,
+  createAnnouncement,
+  deleteAnnouncement,
+} = require("../controllers/announcementController");
+const { protect, authorize } = require("../middleware/auth");
+
+router
+  .route("/")
+  .get(protect, getAnnouncements)
+  .post(protect, authorize("HR", "Manager"), createAnnouncement);
+
+router
+  .route("/:id")
+  .delete(protect, authorize("HR", "Manager"), deleteAnnouncement);
+
+module.exports = router;
