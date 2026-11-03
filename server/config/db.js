@@ -1,5 +1,4 @@
 const mongoose = require("mongoose");
-const { MongoMemoryServer } = require("mongodb-memory-server");
 
 const autoSeedIfEmpty = async () => {
   try {
@@ -117,24 +116,43 @@ const autoSeedIfEmpty = async () => {
 };
 
 const connectDB = async () => {
-  try {
-    const conn = await mongoose.connect(process.env.MONGO_URI, {
-      serverSelectionTimeoutMS: 2500,
-    });
-    console.log(`MongoDB Connected to host: ${conn.connection.host}`);
-    await autoSeedIfEmpty();
-  } catch (error) {
-    console.warn(`Local MongoDB not found (${error.message}). Falling back to in-memory MongoDB server...`);
+  const mongoUri = process.env.MONGO_URI;
+
+  // 1. If a valid MONGO_URI is provided, connect to it
+  if (mongoUri && mongoUri.trim().length > 0) {
     try {
-      const mongod = await MongoMemoryServer.create();
-      const uri = mongod.getUri();
-      const conn = await mongoose.connect(uri);
-      console.log(`In-memory MongoDB Connected successfully at: ${uri}`);
+      const conn = await mongoose.connect(mongoUri, {
+        serverSelectionTimeoutMS: 5000,
+      });
+      console.log(`[StaffSync] MongoDB Connected to host: ${conn.connection.host}`);
       await autoSeedIfEmpty();
-    } catch (innerError) {
-      console.error(`MongoDB Connection Error: ${innerError.message}`);
-      process.exit(1);
+      return;
+    } catch (error) {
+      console.error(`[StaffSync] MongoDB Connection failed with MONGO_URI: ${error.message}`);
     }
+  }
+
+  // 2. Check if running in a cloud container (Render / Production)
+  const isCloudHost = Boolean(process.env.RENDER || process.env.NODE_ENV === "production");
+
+  if (isCloudHost) {
+    console.warn(
+      "[StaffSync] Running on Cloud environment (Render). Server started successfully. Please set MONGO_URI in Render Environment Variables with your free MongoDB Atlas connection string for persistent cloud data."
+    );
+    return;
+  }
+
+  // 3. Fallback for local desktop development only
+  try {
+    const { MongoMemoryServer } = require("mongodb-memory-server");
+    console.log("[StaffSync] Starting local in-memory MongoDB server...");
+    const mongod = await MongoMemoryServer.create();
+    const uri = mongod.getUri();
+    const conn = await mongoose.connect(uri);
+    console.log(`[StaffSync] In-memory MongoDB Connected locally at: ${uri}`);
+    await autoSeedIfEmpty();
+  } catch (innerError) {
+    console.warn(`[StaffSync] Local memory server notice: ${innerError.message}`);
   }
 };
 
