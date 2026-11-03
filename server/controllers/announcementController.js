@@ -1,13 +1,20 @@
+const mongoose = require("mongoose");
 const Announcement = require("../models/Announcement");
+const memoryDb = require("../services/memoryDb");
 
 // @desc    Get all announcements
 // @route   GET /api/announcements
 // @access  Private (All authenticated users)
 const getAnnouncements = async (req, res) => {
   try {
-    const announcements = await Announcement.find()
-      .populate("postedBy", "name role")
-      .sort({ createdAt: -1 });
+    if (mongoose.connection.readyState === 1) {
+      const announcements = await Announcement.find()
+        .populate("postedBy", "name role")
+        .sort({ createdAt: -1 });
+      return res.json(announcements);
+    }
+
+    const announcements = memoryDb.getAllAnnouncements();
     res.json(announcements);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -25,19 +32,24 @@ const createAnnouncement = async (req, res) => {
       return res.status(400).json({ message: "Title and message are required" });
     }
 
-    const announcement = await Announcement.create({
-      title,
-      message,
-      postedBy: req.user._id,
-      targetRole: targetRole || "All",
-    });
+    if (mongoose.connection.readyState === 1) {
+      const announcement = await Announcement.create({
+        title,
+        message,
+        postedBy: req.user._id,
+        targetRole: targetRole || "All",
+      });
 
-    const populated = await Announcement.findById(announcement._id).populate(
-      "postedBy",
-      "name role"
-    );
+      const populated = await Announcement.findById(announcement._id).populate(
+        "postedBy",
+        "name role"
+      );
 
-    res.status(201).json(populated);
+      return res.status(201).json(populated);
+    }
+
+    const announcement = memoryDb.createAnnouncement({ title, message, targetRole }, req.user);
+    res.status(201).json(announcement);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -48,13 +60,18 @@ const createAnnouncement = async (req, res) => {
 // @access  Private (HR, Manager)
 const deleteAnnouncement = async (req, res) => {
   try {
-    const announcement = await Announcement.findById(req.params.id);
+    if (mongoose.connection.readyState === 1) {
+      const announcement = await Announcement.findById(req.params.id);
 
-    if (!announcement) {
-      return res.status(404).json({ message: "Announcement not found" });
+      if (!announcement) {
+        return res.status(404).json({ message: "Announcement not found" });
+      }
+
+      await Announcement.findByIdAndDelete(req.params.id);
+      return res.json({ message: "Announcement deleted successfully" });
     }
 
-    await Announcement.findByIdAndDelete(req.params.id);
+    memoryDb.deleteAnnouncement(req.params.id);
     res.json({ message: "Announcement deleted successfully" });
   } catch (error) {
     res.status(500).json({ message: error.message });

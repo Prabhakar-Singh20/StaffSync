@@ -1,4 +1,6 @@
+const mongoose = require("mongoose");
 const LeaveRequest = require("../models/LeaveRequest");
+const memoryDb = require("../services/memoryDb");
 
 // @desc    Apply for a leave
 // @route   POST /api/leaves
@@ -11,18 +13,24 @@ const applyLeave = async (req, res) => {
       return res.status(400).json({ message: "Start date, end date, and reason are required" });
     }
 
-    const leave = await LeaveRequest.create({
-      user: req.user._id,
-      startDate: new Date(startDate),
-      endDate: new Date(endDate),
-      reason,
-      status: "Pending",
-    });
+    if (mongoose.connection.readyState === 1) {
+      const leave = await LeaveRequest.create({
+        user: req.user._id,
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+        reason,
+        status: "Pending",
+      });
 
-    const populatedLeave = await LeaveRequest.findById(leave._id)
-      .populate("user", "name email department role");
+      const populatedLeave = await LeaveRequest.findById(leave._id)
+        .populate("user", "name email department role");
 
-    res.status(201).json(populatedLeave);
+      return res.status(201).json(populatedLeave);
+    }
+
+    // In-memory cloud fallback
+    const leave = memoryDb.createLeave({ startDate, endDate, reason }, req.user);
+    return res.status(201).json(leave);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -33,10 +41,15 @@ const applyLeave = async (req, res) => {
 // @access  Private
 const getMyLeaves = async (req, res) => {
   try {
-    const leaves = await LeaveRequest.find({ user: req.user._id })
-      .sort({ createdAt: -1 })
-      .populate("user", "name email department role")
-      .populate("reviewedBy", "name role");
+    if (mongoose.connection.readyState === 1) {
+      const leaves = await LeaveRequest.find({ user: req.user._id })
+        .sort({ createdAt: -1 })
+        .populate("user", "name email department role")
+        .populate("reviewedBy", "name role");
+      return res.json(leaves);
+    }
+
+    const leaves = memoryDb.getMyLeaves(req.user._id, req.user.email);
     res.json(leaves);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -48,10 +61,15 @@ const getMyLeaves = async (req, res) => {
 // @access  Private (HR, Manager)
 const getAllLeaves = async (req, res) => {
   try {
-    const leaves = await LeaveRequest.find()
-      .sort({ createdAt: -1 })
-      .populate("user", "name email department role")
-      .populate("reviewedBy", "name role");
+    if (mongoose.connection.readyState === 1) {
+      const leaves = await LeaveRequest.find()
+        .sort({ createdAt: -1 })
+        .populate("user", "name email department role")
+        .populate("reviewedBy", "name role");
+      return res.json(leaves);
+    }
+
+    const leaves = memoryDb.getAllLeaves();
     res.json(leaves);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -69,21 +87,30 @@ const updateLeaveStatus = async (req, res) => {
       return res.status(400).json({ message: "Invalid status value" });
     }
 
-    const leave = await LeaveRequest.findById(req.params.id);
+    if (mongoose.connection.readyState === 1) {
+      const leave = await LeaveRequest.findById(req.params.id);
 
-    if (!leave) {
-      return res.status(404).json({ message: "Leave request not found" });
+      if (!leave) {
+        return res.status(404).json({ message: "Leave request not found" });
+      }
+
+      leave.status = status;
+      leave.reviewedBy = req.user._id;
+
+      const updatedLeave = await leave.save();
+      const populated = await LeaveRequest.findById(updatedLeave._id)
+        .populate("user", "name email department role")
+        .populate("reviewedBy", "name role");
+
+      return res.json(populated);
     }
 
-    leave.status = status;
-    leave.reviewedBy = req.user._id;
-
-    const updatedLeave = await leave.save();
-    const populated = await LeaveRequest.findById(updatedLeave._id)
-      .populate("user", "name email department role")
-      .populate("reviewedBy", "name role");
-
-    res.json(populated);
+    // In-memory cloud fallback
+    const updated = memoryDb.updateLeaveStatus(req.params.id, status, req.user);
+    if (!updated) {
+      return res.status(404).json({ message: "Leave request not found" });
+    }
+    res.json(updated);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

@@ -1,6 +1,7 @@
+const mongoose = require("mongoose");
 const Attendance = require("../models/Attendance");
+const memoryDb = require("../services/memoryDb");
 
-// Helper to normalize date to midnight UTC
 const getTodayDate = () => {
   const now = new Date();
   return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
@@ -19,23 +20,33 @@ const checkIn = async (req, res) => {
       hour12: true,
     });
 
-    let record = await Attendance.findOne({ user: req.user._id, date: today });
+    if (mongoose.connection.readyState === 1) {
+      let record = await Attendance.findOne({ user: req.user._id, date: today });
 
-    if (record) {
-      return res.status(400).json({
-        message: "You have already checked in for today",
-        record,
+      if (record) {
+        return res.status(400).json({
+          message: "You have already checked in for today",
+          record,
+        });
+      }
+
+      record = await Attendance.create({
+        user: req.user._id,
+        date: today,
+        checkInTime: currentTimeStr,
+        status: "Present",
       });
+
+      return res.status(201).json({ message: "Check-in successful", record });
     }
 
-    record = await Attendance.create({
-      user: req.user._id,
-      date: today,
-      checkInTime: currentTimeStr,
-      status: "Present",
-    });
-
-    res.status(201).json({ message: "Check-in successful", record });
+    // In-memory cloud fallback
+    try {
+      const record = memoryDb.checkIn(req.user);
+      return res.status(201).json({ message: "Check-in successful", record });
+    } catch (inErr) {
+      return res.status(400).json({ message: inErr.message, record: inErr.record || null });
+    }
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -54,16 +65,26 @@ const checkOut = async (req, res) => {
       hour12: true,
     });
 
-    const record = await Attendance.findOne({ user: req.user._id, date: today });
+    if (mongoose.connection.readyState === 1) {
+      const record = await Attendance.findOne({ user: req.user._id, date: today });
 
-    if (!record) {
-      return res.status(400).json({ message: "You need to check in first before checking out" });
+      if (!record) {
+        return res.status(400).json({ message: "You need to check in first before checking out" });
+      }
+
+      record.checkOutTime = currentTimeStr;
+      await record.save();
+
+      return res.json({ message: "Check-out successful", record });
     }
 
-    record.checkOutTime = currentTimeStr;
-    await record.save();
-
-    res.json({ message: "Check-out successful", record });
+    // In-memory cloud fallback
+    try {
+      const record = memoryDb.checkOut(req.user);
+      return res.json({ message: "Check-out successful", record });
+    } catch (outErr) {
+      return res.status(400).json({ message: outErr.message });
+    }
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -74,21 +95,31 @@ const checkOut = async (req, res) => {
 // @access  Private
 const getMyAttendance = async (req, res) => {
   try {
-    const records = await Attendance.find({ user: req.user._id }).sort({ date: -1 });
+    if (mongoose.connection.readyState === 1) {
+      const records = await Attendance.find({ user: req.user._id }).sort({ date: -1 });
+      return res.json(records);
+    }
+
+    const records = memoryDb.getMyAttendance(req.user._id, req.user.email);
     res.json(records);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
-// @desc    Get all attendance records (HR Attendance Summary)
+// @desc    Get all attendance records (HR & Manager Attendance Summary)
 // @route   GET /api/attendance
-// @access  Private (HR)
+// @access  Private (HR, Manager)
 const getAllAttendance = async (req, res) => {
   try {
-    const records = await Attendance.find()
-      .populate("user", "name email department")
-      .sort({ date: -1, createdAt: -1 });
+    if (mongoose.connection.readyState === 1) {
+      const records = await Attendance.find()
+        .populate("user", "name email department")
+        .sort({ date: -1, createdAt: -1 });
+      return res.json(records);
+    }
+
+    const records = memoryDb.getAllAttendance();
     res.json(records);
   } catch (error) {
     res.status(500).json({ message: error.message });

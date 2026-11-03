@@ -1,5 +1,7 @@
 const jwt = require("jsonwebtoken");
+const mongoose = require("mongoose");
 const User = require("../models/User");
+const memoryDb = require("../services/memoryDb");
 
 const protect = async (req, res, next) => {
   let token;
@@ -14,7 +16,12 @@ const protect = async (req, res, next) => {
         token,
         process.env.JWT_SECRET || "staffsync_super_secret_jwt_key_2026"
       );
-      req.user = await User.findById(decoded.id).select("-password");
+
+      if (mongoose.connection.readyState === 1) {
+        req.user = await User.findById(decoded.id).select("-password");
+      } else {
+        req.user = memoryDb.findUserById(decoded.id);
+      }
 
       if (!req.user) {
         return res.status(401).json({ message: "Not authorized, user not found" });
