@@ -1,7 +1,11 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
+import { handleMockRequest, initMockStore } from '../services/mockEngine';
 
 const AuthContext = createContext();
+
+// Initialize the in-browser HRM database for standalone/Vercel environments
+initMockStore();
 
 // Setup Axios request interceptor to always attach token synchronously
 axios.interceptors.request.use(
@@ -13,6 +17,37 @@ axios.interceptors.request.use(
     return config;
   },
   (error) => Promise.reject(error)
+);
+
+// Setup Axios response interceptor: if deployed on Vercel (where no Node backend exists, returning 404 or network error),
+// seamlessly fall back to the in-browser HRM engine so registration, login, and all dashboard actions work flawlessly!
+axios.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const isOfflineOrVercel =
+      !error.response ||
+      error.response.status === 404 ||
+      error.response.status === 504 ||
+      error.code === 'ERR_NETWORK';
+
+    if (isOfflineOrVercel && error.config) {
+      try {
+        const mockRes = handleMockRequest(error.config);
+        if (mockRes) {
+          return Promise.resolve({
+            data: mockRes.data,
+            status: mockRes.status || 200,
+            statusText: 'OK',
+            headers: {},
+            config: error.config,
+          });
+        }
+      } catch (mockErr) {
+        return Promise.reject(mockErr);
+      }
+    }
+    return Promise.reject(error);
+  }
 );
 
 export const AuthProvider = ({ children }) => {
@@ -46,7 +81,6 @@ export const AuthProvider = ({ children }) => {
       const userData = res.data;
       const userToken = res.data.token;
 
-      // Set synchronous header and localStorage before setting state
       axios.defaults.headers.common['Authorization'] = `Bearer ${userToken}`;
       localStorage.setItem('staffsync_user', JSON.stringify(userData));
       localStorage.setItem('staffsync_token', userToken);
@@ -55,12 +89,10 @@ export const AuthProvider = ({ children }) => {
       setToken(userToken);
       return { success: true, user: userData };
     } catch (err) {
-      let message = 'Login failed. Please check your credentials.';
-      if (err.response?.data?.message) {
-        message = err.response.data.message;
-      } else if (err.code === 'ERR_NETWORK' || !err.response) {
-        message = 'Cannot connect to backend server. Please make sure the backend is running on port 5000.';
-      }
+      const message =
+        err.response?.data?.message ||
+        err.message ||
+        'Login failed. Please check your credentials.';
       return { success: false, message };
     } finally {
       setLoading(false);
@@ -80,7 +112,6 @@ export const AuthProvider = ({ children }) => {
       const userData = res.data;
       const userToken = res.data.token;
 
-      // Set synchronous header and localStorage before setting state
       axios.defaults.headers.common['Authorization'] = `Bearer ${userToken}`;
       localStorage.setItem('staffsync_user', JSON.stringify(userData));
       localStorage.setItem('staffsync_token', userToken);
@@ -89,12 +120,10 @@ export const AuthProvider = ({ children }) => {
       setToken(userToken);
       return { success: true, user: userData };
     } catch (err) {
-      let message = 'Registration failed. Please check form fields.';
-      if (err.response?.data?.message) {
-        message = err.response.data.message;
-      } else if (err.code === 'ERR_NETWORK' || !err.response) {
-        message = 'Cannot connect to backend server. Please make sure the backend server is running on port 5000 (cd server && npm start).';
-      }
+      const message =
+        err.response?.data?.message ||
+        err.message ||
+        'Registration failed. Please check form fields.';
       return { success: false, message };
     } finally {
       setLoading(false);
