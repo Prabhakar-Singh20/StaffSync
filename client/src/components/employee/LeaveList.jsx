@@ -9,9 +9,10 @@ const LeaveList = ({ refreshTrigger }) => {
   const fetchLeaves = async () => {
     try {
       const res = await axios.get('/api/leaves/my-leaves');
-      setLeaves(res.data);
+      setLeaves(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error(err);
+      setLeaves([]);
     } finally {
       setLoading(false);
     }
@@ -21,31 +22,31 @@ const LeaveList = ({ refreshTrigger }) => {
     fetchLeaves();
   }, [refreshTrigger]);
 
-  if (loading) {
-    return <div style={{ color: '#9ca3af' }}>Loading leaves...</div>;
-  }
+  const safeLeaves = Array.isArray(leaves) ? leaves : [];
 
   return (
     <div className="card">
       <h3 style={{ fontSize: '1.15rem', fontWeight: '600', color: '#ffffff', marginBottom: '18px' }}>
-        My Leaves
+        My Leaves ({safeLeaves.length})
       </h3>
 
-      {leaves.length === 0 ? (
-        <p style={{ color: '#9ca3af', fontSize: '0.9rem' }}>No leave requests submitted yet.</p>
+      {safeLeaves.length === 0 ? (
+        <p style={{ color: '#9ca3af', fontSize: '0.9rem' }}>
+          {loading ? 'Loading leave history...' : 'No leave requests submitted yet.'}
+        </p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          {leaves.map((leave) => {
-            const start = new Date(leave.startDate).toLocaleDateString(undefined, {
+          {safeLeaves.map((leave) => {
+            const start = leave.startDate ? new Date(leave.startDate).toLocaleDateString(undefined, {
               day: '2-digit',
               month: 'short',
               year: 'numeric',
-            });
-            const end = new Date(leave.endDate).toLocaleDateString(undefined, {
+            }) : '--';
+            const end = leave.endDate ? new Date(leave.endDate).toLocaleDateString(undefined, {
               day: '2-digit',
               month: 'short',
               year: 'numeric',
-            });
+            }) : '--';
             const reviewer =
               typeof leave.reviewedBy === 'object' && leave.reviewedBy
                 ? `${leave.reviewedBy.name} (${leave.reviewedBy.role})`
@@ -53,7 +54,7 @@ const LeaveList = ({ refreshTrigger }) => {
 
             return (
               <div
-                key={leave._id}
+                key={leave._id || Math.random()}
                 style={{
                   background: '#1f2937',
                   border: '1px solid #374151',
@@ -73,7 +74,7 @@ const LeaveList = ({ refreshTrigger }) => {
                       {start} &rarr; {end}
                     </span>
                   </div>
-                  <p style={{ color: '#9ca3af', fontSize: '0.86rem' }}>{leave.reason}</p>
+                  <p style={{ color: '#9ca3af', fontSize: '0.86rem' }}>{leave.reason || 'No reason provided'}</p>
                   {reviewer && leave.status !== 'Pending' && (
                     <span style={{ fontSize: '0.76rem', color: '#60a5fa', display: 'block', marginTop: '6px' }}>
                       Reviewed by: <strong>{reviewer}</strong>
@@ -82,8 +83,8 @@ const LeaveList = ({ refreshTrigger }) => {
                 </div>
 
                 <div>
-                  <span className={`badge badge-${leave.status.toLowerCase()}`}>
-                    {leave.status}
+                  <span className={`badge badge-${(leave.status || 'pending').toLowerCase()}`}>
+                    {leave.status || 'Pending'}
                   </span>
                 </div>
               </div>

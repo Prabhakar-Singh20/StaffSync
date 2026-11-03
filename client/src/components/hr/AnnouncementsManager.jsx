@@ -16,9 +16,10 @@ const AnnouncementsManager = () => {
   const fetchAnnouncements = async () => {
     try {
       const res = await axios.get('/api/announcements');
-      setAnnouncements(res.data);
+      setAnnouncements(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error(err);
+      setAnnouncements([]);
     } finally {
       setLoading(false);
     }
@@ -55,6 +56,8 @@ const AnnouncementsManager = () => {
     }
   };
 
+  const safeAnnouncements = Array.isArray(announcements) ? announcements : [];
+
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px' }}>
       {/* Create Announcement */}
@@ -64,7 +67,7 @@ const AnnouncementsManager = () => {
             Publish Announcement
           </h3>
           <p style={{ fontSize: '0.82rem', color: '#9ca3af', marginTop: '2px' }}>
-            Posting as: <span style={{ color: '#60a5fa', fontWeight: '600' }}>{user?.name} ({user?.role})</span>
+            Posting as: <span style={{ color: '#60a5fa', fontWeight: '600' }}>{user?.name || 'Authorized User'} ({user?.role || 'Staff'})</span>
           </p>
         </div>
 
@@ -127,20 +130,22 @@ const AnnouncementsManager = () => {
       {/* Existing Announcements List */}
       <div className="card">
         <h3 style={{ fontSize: '1.15rem', fontWeight: '600', color: '#ffffff', marginBottom: '18px' }}>
-          Organization Announcements ({announcements.length})
+          Organization Announcements ({safeAnnouncements.length})
         </h3>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', maxHeight: '520px', overflowY: 'auto' }}>
-          {announcements.length === 0 ? (
-            <p style={{ color: '#9ca3af', fontSize: '0.9rem' }}>No announcements active.</p>
+          {safeAnnouncements.length === 0 ? (
+            <p style={{ color: '#9ca3af', fontSize: '0.9rem' }}>
+              {loading ? 'Loading announcements...' : 'No announcements active.'}
+            </p>
           ) : (
-            announcements.map((item) => {
+            safeAnnouncements.map((item) => {
               const authorName = item.postedBy?.name || 'Administrator';
               const authorRole = item.postedBy?.role || 'Admin';
 
               return (
                 <div
-                  key={item._id}
+                  key={item._id || Math.random()}
                   style={{
                     background: '#1f2937',
                     border: '1px solid #374151',
@@ -161,7 +166,7 @@ const AnnouncementsManager = () => {
                       <span>
                         Posted by: <strong style={{ color: '#60a5fa' }}>{authorName}</strong> ({authorRole})
                       </span>
-                      <span>{new Date(item.createdAt).toLocaleDateString()}</span>
+                      <span>{item.createdAt ? new Date(item.createdAt).toLocaleDateString() : '--'}</span>
                     </div>
                   </div>
 

@@ -23,9 +23,10 @@ const EmployeeCRUD = () => {
   const fetchEmployees = async () => {
     try {
       const res = await axios.get('/api/employees');
-      setEmployees(res.data);
+      setEmployees(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error(err);
+      setEmployees([]);
     } finally {
       setLoading(false);
     }
@@ -108,11 +109,13 @@ const EmployeeCRUD = () => {
     }
   };
 
+  const safeEmployees = Array.isArray(employees) ? employees : [];
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h3 style={{ fontSize: '1.2rem', fontWeight: '700', color: '#ffffff' }}>
-          Employee Directory ({employees.length})
+          Employee Directory ({safeEmployees.length})
         </h3>
         <button onClick={handleOpenAdd} className="btn btn-primary">
           <UserPlus size={16} /> Add Employee
@@ -270,19 +273,19 @@ const EmployeeCRUD = () => {
               </tr>
             </thead>
             <tbody>
-              {employees.length === 0 ? (
+              {safeEmployees.length === 0 ? (
                 <tr>
                   <td colSpan="6" style={{ textAlign: 'center', color: '#9ca3af', padding: '24px' }}>
-                    No employee records registered yet.
+                    {loading ? 'Loading employees...' : 'No employee records registered yet.'}
                   </td>
                 </tr>
               ) : (
-                employees.map((emp) => (
-                  <tr key={emp._id}>
+                safeEmployees.map((emp) => (
+                  <tr key={emp._id || Math.random()}>
                     <td style={{ fontWeight: '600', color: '#ffffff' }}>{emp.user?.name || 'N/A'}</td>
                     <td>{emp.user?.email || 'N/A'}</td>
-                    <td><span className="badge badge-role">{emp.department}</span></td>
-                    <td>${Number(emp.salary).toLocaleString()}</td>
+                    <td><span className="badge badge-role">{emp.department || 'General'}</span></td>
+                    <td>${Number(emp.salary || 0).toLocaleString()}</td>
                     <td>{emp.phone || '--'}</td>
                     <td>
                       <div style={{ display: 'flex', gap: '8px' }}>

@@ -14,9 +14,10 @@ const LeaveApplications = () => {
   const fetchLeaves = async () => {
     try {
       const res = await axios.get('/api/leaves');
-      setLeaves(res.data);
+      setLeaves(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error(err);
+      setLeaves([]);
     } finally {
       setLoading(false);
     }
@@ -38,7 +39,9 @@ const LeaveApplications = () => {
     }
   };
 
-  const filteredLeaves = leaves.filter((l) => {
+  const safeLeaves = Array.isArray(leaves) ? leaves : [];
+  const filteredLeaves = safeLeaves.filter((l) => {
+    if (!l) return false;
     if (filter === 'All') return true;
     return l.status === filter;
   });
@@ -48,7 +51,7 @@ const LeaveApplications = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
         <div>
           <h3 style={{ fontSize: '1.2rem', fontWeight: '700', color: '#ffffff' }}>
-            Leave Applications ({leaves.length})
+            Leave Applications ({safeLeaves.length})
           </h3>
           <p style={{ fontSize: '0.82rem', color: '#9ca3af', marginTop: '2px' }}>
             Reviewed by both HR Admins & Managers
@@ -97,20 +100,20 @@ const LeaveApplications = () => {
               {filteredLeaves.length === 0 ? (
                 <tr>
                   <td colSpan="6" style={{ textAlign: 'center', color: '#9ca3af', padding: '24px' }}>
-                    No {filter !== 'All' ? filter.toLowerCase() : ''} leave applications found.
+                    {loading ? 'Loading leave applications...' : `No ${filter !== 'All' ? filter.toLowerCase() : ''} leave applications found.`}
                   </td>
                 </tr>
               ) : (
                 filteredLeaves.map((l) => {
-                  const s = new Date(l.startDate).toLocaleDateString();
-                  const e = new Date(l.endDate).toLocaleDateString();
+                  const s = l.startDate ? new Date(l.startDate).toLocaleDateString() : '--';
+                  const e = l.endDate ? new Date(l.endDate).toLocaleDateString() : '--';
                   const reviewer =
                     typeof l.reviewedBy === 'object' && l.reviewedBy
                       ? `${l.reviewedBy.name} (${l.reviewedBy.role})`
                       : l.reviewedBy;
 
                   return (
-                    <tr key={l._id}>
+                    <tr key={l._id || Math.random()}>
                       <td>
                         <div style={{ fontWeight: '600', color: '#ffffff' }}>
                           {l.user?.name || 'Unnamed Employee'}
@@ -126,11 +129,11 @@ const LeaveApplications = () => {
                         {s} &rarr; {e}
                       </td>
                       <td style={{ maxWidth: '240px', wordBreak: 'break-word', color: '#d1d5db' }}>
-                        {l.reason}
+                        {l.reason || 'No reason provided'}
                       </td>
                       <td>
-                        <span className={`badge badge-${l.status.toLowerCase()}`}>
-                          {l.status}
+                        <span className={`badge badge-${(l.status || 'pending').toLowerCase()}`}>
+                          {l.status || 'Pending'}
                         </span>
                         {reviewer && l.status !== 'Pending' && (
                           <div style={{ fontSize: '0.74rem', color: '#9ca3af', marginTop: '4px' }}>

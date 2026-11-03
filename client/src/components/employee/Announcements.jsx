@@ -14,10 +14,12 @@ const Announcements = () => {
           axios.get('/api/announcements'),
           axios.get('/api/trainings'),
         ]);
-        setAnnouncements(annRes.data);
-        setTrainings(trainRes.data);
+        setAnnouncements(Array.isArray(annRes.data) ? annRes.data : []);
+        setTrainings(Array.isArray(trainRes.data) ? trainRes.data : []);
       } catch (err) {
         console.error('Failed to load announcements/trainings', err);
+        setAnnouncements([]);
+        setTrainings([]);
       } finally {
         setLoading(false);
       }
@@ -25,9 +27,8 @@ const Announcements = () => {
     fetchData();
   }, []);
 
-  if (loading) {
-    return <div style={{ color: '#9ca3af', padding: '24px' }}>Loading company updates...</div>;
-  }
+  const safeAnn = Array.isArray(announcements) ? announcements : [];
+  const safeTrain = Array.isArray(trainings) ? trainings : [];
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px' }}>
@@ -35,20 +36,24 @@ const Announcements = () => {
       <div className="card">
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
           <Bell size={20} color="#3b82f6" />
-          <h3 style={{ fontSize: '1.15rem', fontWeight: '600', color: '#ffffff' }}>Company Announcements</h3>
+          <h3 style={{ fontSize: '1.15rem', fontWeight: '600', color: '#ffffff' }}>
+            Company Announcements ({safeAnn.length})
+          </h3>
         </div>
 
-        {announcements.length === 0 ? (
-          <p style={{ color: '#9ca3af', fontSize: '0.9rem' }}>No announcements available.</p>
+        {safeAnn.length === 0 ? (
+          <p style={{ color: '#9ca3af', fontSize: '0.9rem' }}>
+            {loading ? 'Loading company updates...' : 'No announcements available.'}
+          </p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {announcements.map((item) => {
+            {safeAnn.map((item) => {
               const authorName = item.postedBy?.name || 'Management';
               const authorRole = item.postedBy?.role || 'Admin';
 
               return (
                 <div
-                  key={item._id}
+                  key={item._id || Math.random()}
                   style={{
                     background: '#1f2937',
                     border: '1px solid #374151',
@@ -59,7 +64,7 @@ const Announcements = () => {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                     <h4 style={{ fontSize: '0.98rem', fontWeight: '600', color: '#f3f4f6' }}>{item.title}</h4>
                     <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
-                      {new Date(item.createdAt).toLocaleDateString()}
+                      {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : '--'}
                     </span>
                   </div>
                   <p style={{ fontSize: '0.88rem', color: '#d1d5db', lineHeight: '1.5' }}>{item.message}</p>
@@ -85,16 +90,20 @@ const Announcements = () => {
       <div className="card">
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
           <BookOpen size={20} color="#10b981" />
-          <h3 style={{ fontSize: '1.15rem', fontWeight: '600', color: '#ffffff' }}>Trainings & Workshops</h3>
+          <h3 style={{ fontSize: '1.15rem', fontWeight: '600', color: '#ffffff' }}>
+            Trainings & Workshops ({safeTrain.length})
+          </h3>
         </div>
 
-        {trainings.length === 0 ? (
-          <p style={{ color: '#9ca3af', fontSize: '0.9rem' }}>No training sessions scheduled.</p>
+        {safeTrain.length === 0 ? (
+          <p style={{ color: '#9ca3af', fontSize: '0.9rem' }}>
+            {loading ? 'Loading scheduled sessions...' : 'No training sessions scheduled.'}
+          </p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {trainings.map((prog) => (
+            {safeTrain.map((prog) => (
               <div
-                key={prog._id}
+                key={prog._id || Math.random()}
                 style={{
                   background: '#1f2937',
                   border: '1px solid #374151',
@@ -104,15 +113,15 @@ const Announcements = () => {
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
                   <h4 style={{ fontSize: '0.95rem', fontWeight: '600', color: '#f3f4f6' }}>{prog.title}</h4>
-                  <span className="badge badge-role">{prog.targetDepartment}</span>
+                  <span className="badge badge-role">{prog.targetDepartment || 'General'}</span>
                 </div>
                 <p style={{ fontSize: '0.86rem', color: '#d1d5db', lineHeight: '1.5', marginBottom: '12px' }}>
                   {prog.description}
                 </p>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#9ca3af' }}>
-                  <span>Trainer: <strong style={{ color: '#e5e7eb' }}>{prog.trainer}</strong></span>
+                  <span>Trainer: <strong style={{ color: '#e5e7eb' }}>{prog.trainer || 'Instructor'}</strong></span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <Calendar size={14} /> {new Date(prog.date).toLocaleDateString()}
+                    <Calendar size={14} /> {prog.date ? new Date(prog.date).toLocaleDateString() : '--'}
                   </span>
                 </div>
               </div>

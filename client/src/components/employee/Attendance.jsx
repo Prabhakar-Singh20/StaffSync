@@ -12,16 +12,19 @@ const Attendance = () => {
   const fetchAttendance = async () => {
     try {
       const res = await axios.get('/api/attendance/my-attendance');
-      setRecords(res.data);
+      const data = Array.isArray(res.data) ? res.data : [];
+      setRecords(data);
 
       const todayStr = new Date().toISOString().slice(0, 10);
-      const found = res.data.find((r) => {
+      const found = data.find((r) => {
+        if (!r?.date) return false;
         const rDate = new Date(r.date).toISOString().slice(0, 10);
         return rDate === todayStr;
       });
       setTodayRecord(found || null);
     } catch (err) {
       console.error(err);
+      setRecords([]);
     } finally {
       setLoading(false);
     }
@@ -36,7 +39,7 @@ const Attendance = () => {
     setMsg('');
     try {
       const res = await axios.post('/api/attendance/check-in');
-      setMsg(res.data.message);
+      setMsg(res.data?.message || 'Check-in recorded');
       fetchAttendance();
     } catch (err) {
       setError(err.response?.data?.message || 'Check-in failed');
@@ -48,12 +51,14 @@ const Attendance = () => {
     setMsg('');
     try {
       const res = await axios.post('/api/attendance/check-out');
-      setMsg(res.data.message);
+      setMsg(res.data?.message || 'Check-out recorded');
       fetchAttendance();
     } catch (err) {
       setError(err.response?.data?.message || 'Check-out failed');
     }
   };
+
+  const safeRecords = Array.isArray(records) ? records : [];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -75,8 +80,8 @@ const Attendance = () => {
               <span style={{ color: '#3b82f6' }}>
                 <strong>Out:</strong> {todayRecord.checkOutTime || '--'}
               </span>
-              <span className={`badge badge-${todayRecord.status.toLowerCase()}`}>
-                {todayRecord.status}
+              <span className={`badge badge-${(todayRecord.status || 'present').toLowerCase()}`}>
+                {todayRecord.status || 'Present'}
               </span>
             </div>
           )}
@@ -116,7 +121,7 @@ const Attendance = () => {
       {/* Attendance History Table */}
       <div className="card">
         <h3 style={{ fontSize: '1.1rem', fontWeight: '600', color: '#ffffff', marginBottom: '16px' }}>
-          Attendance History
+          Attendance History ({safeRecords.length})
         </h3>
 
         <div className="table-container">
@@ -130,21 +135,21 @@ const Attendance = () => {
               </tr>
             </thead>
             <tbody>
-              {records.length === 0 ? (
+              {safeRecords.length === 0 ? (
                 <tr>
                   <td colSpan="4" style={{ textAlign: 'center', color: '#9ca3af', padding: '24px' }}>
-                    No attendance records logged yet.
+                    {loading ? 'Loading attendance logs...' : 'No attendance records logged yet.'}
                   </td>
                 </tr>
               ) : (
-                records.map((r) => (
-                  <tr key={r._id}>
-                    <td>{new Date(r.date).toLocaleDateString()}</td>
+                safeRecords.map((r) => (
+                  <tr key={r._id || Math.random()}>
+                    <td>{r.date ? new Date(r.date).toLocaleDateString() : '--'}</td>
                     <td>{r.checkInTime || '--:--'}</td>
                     <td>{r.checkOutTime || '--:--'}</td>
                     <td>
-                      <span className={`badge badge-${r.status.toLowerCase()}`}>
-                        {r.status}
+                      <span className={`badge badge-${(r.status || 'present').toLowerCase()}`}>
+                        {r.status || 'Present'}
                       </span>
                     </td>
                   </tr>

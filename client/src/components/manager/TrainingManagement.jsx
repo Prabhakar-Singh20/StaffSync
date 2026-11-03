@@ -15,9 +15,10 @@ const TrainingManagement = () => {
   const fetchTrainings = async () => {
     try {
       const res = await axios.get('/api/trainings');
-      setTrainings(res.data);
+      setTrainings(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error(err);
+      setTrainings([]);
     }
   };
 
@@ -59,6 +60,8 @@ const TrainingManagement = () => {
       setError(err.response?.data?.message || 'Failed to delete');
     }
   };
+
+  const safeTrainings = Array.isArray(trainings) ? trainings : [];
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px' }}>
@@ -154,16 +157,16 @@ const TrainingManagement = () => {
       {/* Existing Training Modules */}
       <div className="card">
         <h3 style={{ fontSize: '1.15rem', fontWeight: '600', color: '#ffffff', marginBottom: '18px' }}>
-          Active Training Programs ({trainings.length})
+          Active Training Programs ({safeTrainings.length})
         </h3>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', maxHeight: '520px', overflowY: 'auto' }}>
-          {trainings.length === 0 ? (
+          {safeTrainings.length === 0 ? (
             <p style={{ color: '#9ca3af', fontSize: '0.9rem' }}>No training programs active.</p>
           ) : (
-            trainings.map((t) => (
+            safeTrainings.map((t) => (
               <div
-                key={t._id}
+                key={t._id || Math.random()}
                 style={{
                   background: '#1f2937',
                   border: '1px solid #374151',
@@ -184,7 +187,7 @@ const TrainingManagement = () => {
                   </p>
                   <div style={{ display: 'flex', gap: '16px', fontSize: '0.78rem', color: '#9ca3af' }}>
                     <span>Trainer: <strong style={{ color: '#ffffff' }}>{t.trainer}</strong></span>
-                    <span>Date: {new Date(t.date).toLocaleDateString()}</span>
+                    <span>Date: {t.date ? new Date(t.date).toLocaleDateString() : '--'}</span>
                   </div>
                 </div>
 

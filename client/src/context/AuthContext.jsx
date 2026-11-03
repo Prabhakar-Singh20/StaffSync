@@ -7,9 +7,42 @@ const AuthContext = createContext();
 // Initialize in-browser HRM storage for Vercel/standalone environments
 initMockStore();
 
+// Normalize and evaluate configured API base URL
+const rawBaseUrl = (
+  import.meta.env.VITE_API_BASE_URL ||
+  (typeof window !== 'undefined' && window.__CONFIG__?.API_BASE_URL) ||
+  ''
+).trim();
+
+// Determine if we are hosted on a static cloud platform (Vercel, GitHub Pages, Netlify)
+const isStaticDeploy =
+  typeof window !== 'undefined' &&
+  (window.location.hostname.includes('vercel.app') ||
+   window.location.hostname.includes('github.io') ||
+   window.location.hostname.includes('netlify.app'));
+
+// Validate if rawBaseUrl points to a genuine, working external backend:
+// Invalid if:
+// 1. It is empty or not starting with http
+// 2. It points to the static frontend host itself (e.g. staff-sync-silk.vercel.app)
+// 3. It points to localhost while deployed on HTTPS (browsers block mixed content)
+const isExternalBackendValid = Boolean(
+  rawBaseUrl &&
+  rawBaseUrl.startsWith('http') &&
+  !rawBaseUrl.includes('vercel.app') &&
+  !rawBaseUrl.includes('github.io') &&
+  !rawBaseUrl.includes('netlify.app') &&
+  !(typeof window !== 'undefined' && window.location.protocol === 'https:' && rawBaseUrl.startsWith('http://localhost'))
+);
+
+if (isExternalBackendValid) {
+  axios.defaults.baseURL = rawBaseUrl.replace(/\/$/, '');
+}
+
 // Setup Axios request interceptor:
 // 1. Synchronously attaches Bearer token to all requests.
-// 2. On Vercel (or static hosting without a Node server), uses the in-browser HRM engine adapter directly.
+// 2. If running on a static deploy without a verified external cloud backend,
+//    routes all /api/* requests directly through the HRM persistence engine.
 axios.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('staffsync_token');
@@ -17,15 +50,7 @@ axios.interceptors.request.use(
       config.headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const isStaticDeploy =
-      typeof window !== 'undefined' &&
-      (window.location.hostname.includes('vercel.app') ||
-       window.location.hostname.includes('github.io') ||
-       window.location.hostname.includes('netlify.app'));
-
-    // On Vercel/static deploys without an external backend, route directly to the in-browser HRM engine
-    // to completely prevent Vercel's "405 Method Not Allowed" on POST requests
-    if (isStaticDeploy && !import.meta.env.VITE_API_BASE_URL) {
+    if (isStaticDeploy && !isExternalBackendValid) {
       config.adapter = async (cfg) => {
         try {
           const mockRes = handleMockRequest(cfg);
@@ -52,9 +77,31 @@ axios.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Safety net response interceptor: catches 404, 405 (Method Not Allowed), 502, 504, or Network Errors
+// Safety net response interceptor:
+// 1. Catches Vercel SPA rewrites where a missing backend endpoint returns index.html (200 OK HTML)
+// 2. Catches 404, 405 (Method Not Allowed), 500, 502, 504, or Network Errors
 axios.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const isHtmlResponse =
+      typeof response.data === 'string' &&
+      (response.data.includes('<!doctype html') ||
+       response.data.includes('<!DOCTYPE html') ||
+       response.data.includes('<html'));
+
+    if (isHtmlResponse && response.config?.url?.includes('/api/')) {
+      const mockRes = handleMockRequest(response.config);
+      if (mockRes) {
+        return {
+          data: mockRes.data,
+          status: mockRes.status || 200,
+          statusText: 'OK',
+          headers: {},
+          config: response.config,
+        };
+      }
+    }
+    return response;
+  },
   async (error) => {
     const status = error.response?.status;
     const isUnreachable =
@@ -66,7 +113,7 @@ axios.interceptors.response.use(
       status === 504 ||
       error.code === 'ERR_NETWORK';
 
-    if (isUnreachable && error.config) {
+    if (isUnreachable && error.config && error.config.url?.includes('/api/')) {
       try {
         const mockRes = handleMockRequest(error.config);
         if (mockRes) {
@@ -88,16 +135,24 @@ axios.interceptors.response.use(
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('staffsync_user');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem('staffsync_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
   });
 
   const [token, setToken] = useState(() => {
-    const savedToken = localStorage.getItem('staffsync_token') || null;
-    if (savedToken) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${savedToken}`;
+    try {
+      const savedToken = localStorage.getItem('staffsync_token') || null;
+      if (savedToken) {
+        axios.defaults.headers.common['Authorization'] = `Bearer ${savedToken}`;
+      }
+      return savedToken;
+    } catch {
+      return null;
     }
-    return savedToken;
   });
 
   const [loading, setLoading] = useState(false);
@@ -169,8 +224,10 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     setUser(null);
     setToken(null);
-    localStorage.removeItem('staffsync_user');
-    localStorage.removeItem('staffsync_token');
+    try {
+      localStorage.removeItem('staffsync_user');
+      localStorage.removeItem('staffsync_token');
+    } catch {}
     delete axios.defaults.headers.common['Authorization'];
   };
 

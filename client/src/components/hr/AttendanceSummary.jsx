@@ -10,9 +10,10 @@ const AttendanceSummary = () => {
     const fetchAttendance = async () => {
       try {
         const res = await axios.get('/api/attendance');
-        setRecords(res.data);
+        setRecords(Array.isArray(res.data) ? res.data : []);
       } catch (err) {
         console.error(err);
+        setRecords([]);
       } finally {
         setLoading(false);
       }
@@ -20,10 +21,12 @@ const AttendanceSummary = () => {
     fetchAttendance();
   }, []);
 
+  const safeRecords = Array.isArray(records) ? records : [];
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <h3 style={{ fontSize: '1.2rem', fontWeight: '700', color: '#ffffff' }}>
-        Attendance Records ({records.length})
+        Attendance Records ({safeRecords.length})
       </h3>
 
       <div className="card">
@@ -39,24 +42,24 @@ const AttendanceSummary = () => {
               </tr>
             </thead>
             <tbody>
-              {records.length === 0 ? (
+              {safeRecords.length === 0 ? (
                 <tr>
                   <td colSpan="5" style={{ textAlign: 'center', color: '#9ca3af', padding: '24px' }}>
-                    No attendance records found.
+                    {loading ? 'Loading attendance logs...' : 'No attendance records found.'}
                   </td>
                 </tr>
               ) : (
-                records.map((r) => (
-                  <tr key={r._id}>
+                safeRecords.map((r) => (
+                  <tr key={r._id || Math.random()}>
                     <td style={{ fontWeight: '600', color: '#ffffff' }}>
                       {r.user?.name || 'Unnamed Employee'}
                     </td>
-                    <td>{new Date(r.date).toLocaleDateString()}</td>
+                    <td>{r.date ? new Date(r.date).toLocaleDateString() : '--'}</td>
                     <td>{r.checkInTime || '--:--'}</td>
                     <td>{r.checkOutTime || '--:--'}</td>
                     <td>
-                      <span className={`badge badge-${r.status.toLowerCase()}`}>
-                        {r.status}
+                      <span className={`badge badge-${(r.status || 'present').toLowerCase()}`}>
+                        {r.status || 'Present'}
                       </span>
                     </td>
                   </tr>
