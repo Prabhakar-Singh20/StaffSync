@@ -18,17 +18,20 @@ const registerUser = async (req, res) => {
     const { name, email, password, role, department } = req.body;
 
     if (!name || !email || !password) {
-      return res.status(400).json({ message: "Please provide all required fields" });
+      return res.status(400).json({ message: "Please provide all required fields: Name, Email, and Password" });
     }
 
-    const userExists = await User.findOne({ email });
+    const cleanEmail = email.toLowerCase().trim();
+    const cleanName = name.trim();
+
+    const userExists = await User.findOne({ email: cleanEmail });
     if (userExists) {
-      return res.status(400).json({ message: "User with this email already exists" });
+      return res.status(400).json({ message: "A user with this email already exists. Please log in or use a different email." });
     }
 
     const user = await User.create({
-      name,
-      email,
+      name: cleanName,
+      email: cleanEmail,
       password,
       role: role || "Employee",
       department: department || "Engineering",
@@ -36,14 +39,18 @@ const registerUser = async (req, res) => {
 
     // If registered as Employee, create matching Employee record
     if (user.role === "Employee") {
-      await Employee.create({
-        user: user._id,
-        department: user.department,
-        salary: 45000,
-        joinDate: new Date(),
-        phone: "123-456-7890",
-        address: "HQ Campus",
-      });
+      try {
+        await Employee.create({
+          user: user._id,
+          department: user.department,
+          salary: 45000,
+          joinDate: new Date(),
+          phone: "123-456-7890",
+          address: "HQ Campus",
+        });
+      } catch (empErr) {
+        console.warn("Notice: Employee profile record creation deferred:", empErr.message);
+      }
     }
 
     res.status(201).json({
@@ -55,7 +62,8 @@ const registerUser = async (req, res) => {
       token: generateToken(user._id),
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error("Register error:", error);
+    res.status(500).json({ message: error.message || "Server error during registration" });
   }
 };
 
@@ -70,7 +78,8 @@ const loginUser = async (req, res) => {
       return res.status(400).json({ message: "Please enter email and password" });
     }
 
-    const user = await User.findOne({ email });
+    const cleanEmail = email.toLowerCase().trim();
+    const user = await User.findOne({ email: cleanEmail });
 
     if (user && (await user.matchPassword(password))) {
       res.json({
@@ -97,7 +106,7 @@ const getMe = async (req, res) => {
     const user = await User.findById(req.user._id).select("-password");
     let employeeData = null;
 
-    if (user.role === "Employee") {
+    if (user && user.role === "Employee") {
       employeeData = await Employee.findOne({ user: user._id });
     }
 

@@ -3,6 +3,18 @@ import axios from 'axios';
 
 const AuthContext = createContext();
 
+// Setup Axios request interceptor to always attach token synchronously
+axios.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('staffsync_token');
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => {
     const saved = localStorage.getItem('staffsync_user');
@@ -10,12 +22,15 @@ export const AuthProvider = ({ children }) => {
   });
 
   const [token, setToken] = useState(() => {
-    return localStorage.getItem('staffsync_token') || null;
+    const savedToken = localStorage.getItem('staffsync_token') || null;
+    if (savedToken) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${savedToken}`;
+    }
+    return savedToken;
   });
 
   const [loading, setLoading] = useState(false);
 
-  // Set default auth headers for axios
   useEffect(() => {
     if (token) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
@@ -28,16 +43,25 @@ export const AuthProvider = ({ children }) => {
     setLoading(true);
     try {
       const res = await axios.post('/api/auth/login', { email, password });
-      setUser(res.data);
-      setToken(res.data.token);
-      localStorage.setItem('staffsync_user', JSON.stringify(res.data));
-      localStorage.setItem('staffsync_token', res.data.token);
-      return { success: true, user: res.data };
+      const userData = res.data;
+      const userToken = res.data.token;
+
+      // Set synchronous header and localStorage before setting state
+      axios.defaults.headers.common['Authorization'] = `Bearer ${userToken}`;
+      localStorage.setItem('staffsync_user', JSON.stringify(userData));
+      localStorage.setItem('staffsync_token', userToken);
+
+      setUser(userData);
+      setToken(userToken);
+      return { success: true, user: userData };
     } catch (err) {
-      return {
-        success: false,
-        message: err.response?.data?.message || 'Login failed. Please check credentials.',
-      };
+      let message = 'Login failed. Please check your credentials.';
+      if (err.response?.data?.message) {
+        message = err.response.data.message;
+      } else if (err.code === 'ERR_NETWORK' || !err.response) {
+        message = 'Cannot connect to backend server. Please make sure the backend is running on port 5000.';
+      }
+      return { success: false, message };
     } finally {
       setLoading(false);
     }
@@ -53,16 +77,25 @@ export const AuthProvider = ({ children }) => {
         role,
         department,
       });
-      setUser(res.data);
-      setToken(res.data.token);
-      localStorage.setItem('staffsync_user', JSON.stringify(res.data));
-      localStorage.setItem('staffsync_token', res.data.token);
-      return { success: true, user: res.data };
+      const userData = res.data;
+      const userToken = res.data.token;
+
+      // Set synchronous header and localStorage before setting state
+      axios.defaults.headers.common['Authorization'] = `Bearer ${userToken}`;
+      localStorage.setItem('staffsync_user', JSON.stringify(userData));
+      localStorage.setItem('staffsync_token', userToken);
+
+      setUser(userData);
+      setToken(userToken);
+      return { success: true, user: userData };
     } catch (err) {
-      return {
-        success: false,
-        message: err.response?.data?.message || 'Registration failed.',
-      };
+      let message = 'Registration failed. Please check form fields.';
+      if (err.response?.data?.message) {
+        message = err.response.data.message;
+      } else if (err.code === 'ERR_NETWORK' || !err.response) {
+        message = 'Cannot connect to backend server. Please make sure the backend server is running on port 5000 (cd server && npm start).';
+      }
+      return { success: false, message };
     } finally {
       setLoading(false);
     }
