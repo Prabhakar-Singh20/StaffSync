@@ -46,6 +46,10 @@ const LeaveList = ({ refreshTrigger }) => {
               month: 'short',
               year: 'numeric',
             });
+            const reviewer =
+              typeof leave.reviewedBy === 'object' && leave.reviewedBy
+                ? `${leave.reviewedBy.name} (${leave.reviewedBy.role})`
+                : leave.reviewedBy;
 
             return (
               <div
@@ -70,6 +74,11 @@ const LeaveList = ({ refreshTrigger }) => {
                     </span>
                   </div>
                   <p style={{ color: '#9ca3af', fontSize: '0.86rem' }}>{leave.reason}</p>
+                  {reviewer && leave.status !== 'Pending' && (
+                    <span style={{ fontSize: '0.76rem', color: '#60a5fa', display: 'block', marginTop: '6px' }}>
+                      Reviewed by: <strong>{reviewer}</strong>
+                    </span>
+                  )}
                 </div>
 
                 <div>

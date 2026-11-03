@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Bell, Plus, Trash2, CheckCircle, AlertCircle } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 const AnnouncementsManager = () => {
+  const { user } = useAuth();
   const [announcements, setAnnouncements] = useState([]);
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
@@ -33,7 +35,7 @@ const AnnouncementsManager = () => {
 
     try {
       await axios.post('/api/announcements', { title, message, targetRole });
-      setMsg('Announcement published successfully');
+      setMsg(`Announcement published by ${user?.name || user?.role || 'you'}!`);
       setTitle('');
       setMessage('');
       fetchAnnouncements();
@@ -57,9 +59,14 @@ const AnnouncementsManager = () => {
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px' }}>
       {/* Create Announcement */}
       <div className="card">
-        <h3 style={{ fontSize: '1.15rem', fontWeight: '600', color: '#ffffff', marginBottom: '18px' }}>
-          Create Announcement
-        </h3>
+        <div style={{ marginBottom: '18px' }}>
+          <h3 style={{ fontSize: '1.15rem', fontWeight: '600', color: '#ffffff' }}>
+            Publish Announcement
+          </h3>
+          <p style={{ fontSize: '0.82rem', color: '#9ca3af', marginTop: '2px' }}>
+            Posting as: <span style={{ color: '#60a5fa', fontWeight: '600' }}>{user?.name} ({user?.role})</span>
+          </p>
+        </div>
 
         {msg && (
           <div style={{ padding: '10px 14px', backgroundColor: 'rgba(16, 185, 129, 0.15)', border: '1px solid #10b981', color: '#34d399', borderRadius: '8px', marginBottom: '16px', fontSize: '0.88rem' }}>
@@ -79,7 +86,7 @@ const AnnouncementsManager = () => {
             <input
               type="text"
               className="form-input"
-              placeholder="e.g. Q4 Townhall Meeting"
+              placeholder="e.g. Q4 Townhall Meeting / Team Update"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               required
@@ -91,7 +98,7 @@ const AnnouncementsManager = () => {
             <textarea
               className="form-textarea"
               rows="4"
-              placeholder="Write the company announcement details here..."
+              placeholder="Write the announcement details here for employees & management..."
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               required
@@ -105,7 +112,7 @@ const AnnouncementsManager = () => {
               value={targetRole}
               onChange={(e) => setTargetRole(e.target.value)}
             >
-              <option value="All">All Roles</option>
+              <option value="All">All Roles (Employees, Managers & HR)</option>
               <option value="Employee">Employees Only</option>
               <option value="Manager">Managers Only</option>
             </select>
@@ -120,48 +127,56 @@ const AnnouncementsManager = () => {
       {/* Existing Announcements List */}
       <div className="card">
         <h3 style={{ fontSize: '1.15rem', fontWeight: '600', color: '#ffffff', marginBottom: '18px' }}>
-          Published Announcements ({announcements.length})
+          Organization Announcements ({announcements.length})
         </h3>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', maxHeight: '520px', overflowY: 'auto' }}>
           {announcements.length === 0 ? (
             <p style={{ color: '#9ca3af', fontSize: '0.9rem' }}>No announcements active.</p>
           ) : (
-            announcements.map((item) => (
-              <div
-                key={item._id}
-                style={{
-                  background: '#1f2937',
-                  border: '1px solid #374151',
-                  borderRadius: '8px',
-                  padding: '16px',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  gap: '12px',
-                }}
-              >
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                    <h4 style={{ fontSize: '0.95rem', fontWeight: '600', color: '#ffffff' }}>{item.title}</h4>
-                    <span className="badge badge-role">{item.targetRole}</span>
-                  </div>
-                  <p style={{ color: '#d1d5db', fontSize: '0.86rem', lineHeight: '1.4' }}>{item.message}</p>
-                  <span style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '6px', display: 'block' }}>
-                    {new Date(item.createdAt).toLocaleDateString()}
-                  </span>
-                </div>
+            announcements.map((item) => {
+              const authorName = item.postedBy?.name || 'Administrator';
+              const authorRole = item.postedBy?.role || 'Admin';
 
-                <div>
-                  <button
-                    onClick={() => handleDelete(item._id)}
-                    className="btn btn-danger btn-sm"
-                    title="Delete"
-                  >
-                    <Trash2 size={14} />
-                  </button>
+              return (
+                <div
+                  key={item._id}
+                  style={{
+                    background: '#1f2937',
+                    border: '1px solid #374151',
+                    borderRadius: '8px',
+                    padding: '16px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    gap: '12px',
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                      <h4 style={{ fontSize: '0.95rem', fontWeight: '600', color: '#ffffff' }}>{item.title}</h4>
+                      <span className="badge badge-role">{item.targetRole || 'All'}</span>
+                    </div>
+                    <p style={{ color: '#d1d5db', fontSize: '0.86rem', lineHeight: '1.4' }}>{item.message}</p>
+                    <div style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: '8px', display: 'flex', gap: '12px' }}>
+                      <span>
+                        Posted by: <strong style={{ color: '#60a5fa' }}>{authorName}</strong> ({authorRole})
+                      </span>
+                      <span>{new Date(item.createdAt).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <button
+                      onClick={() => handleDelete(item._id)}
+                      className="btn btn-danger btn-sm"
+                      title="Delete Announcement"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>

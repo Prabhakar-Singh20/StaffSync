@@ -1,6 +1,6 @@
 // Client-side HRM persistence engine for standalone/Vercel environments
 // Ensures registration, login, leaves, attendance, employees, announcements,
-// and trainings work 100% seamlessly even when no backend server is connected.
+// and trainings work 100% seamlessly across HR, Manager, and Employee roles.
 
 const SEED_USERS = [
   {
@@ -53,12 +53,15 @@ const SEED_LEAVES = [
     user: {
       _id: "demo_emp_01",
       name: "Pravanshu Samadhiya",
+      email: "employee@staffsync.com",
+      role: "Employee",
       department: "Engineering",
     },
     startDate: "2026-11-05",
     endDate: "2026-11-06",
     reason: "I have to go for Office Meeting",
     status: "Approved",
+    reviewedBy: "Prabhakar Singh (Manager)",
     createdAt: new Date().toISOString(),
   },
   {
@@ -66,12 +69,15 @@ const SEED_LEAVES = [
     user: {
       _id: "demo_emp_01",
       name: "Pravanshu Samadhiya",
+      email: "employee@staffsync.com",
+      role: "Employee",
       department: "Engineering",
     },
     startDate: "2026-11-10",
     endDate: "2026-11-12",
     reason: "Family function at hometown",
     status: "Rejected",
+    reviewedBy: "HR Admin (HR)",
     createdAt: new Date().toISOString(),
   },
   {
@@ -79,12 +85,15 @@ const SEED_LEAVES = [
     user: {
       _id: "demo_emp_01",
       name: "Pravanshu Samadhiya",
+      email: "employee@staffsync.com",
+      role: "Employee",
       department: "Engineering",
     },
     startDate: "2026-11-20",
     endDate: "2026-11-22",
     reason: "Personal medical checkup and recovery",
     status: "Pending",
+    reviewedBy: null,
     createdAt: new Date().toISOString(),
   },
 ];
@@ -103,7 +112,7 @@ const SEED_ANNOUNCEMENTS = [
     title: "Quarterly Performance Reviews",
     message: "All managers and employees please submit your self-evaluations before November 15.",
     targetRole: "All",
-    postedBy: { name: "HR Admin", role: "HR" },
+    postedBy: { name: "Prabhakar Singh", role: "Manager" },
     createdAt: new Date().toISOString(),
   },
 ];
@@ -126,6 +135,8 @@ const SEED_ATTENDANCE = [
     user: {
       _id: "demo_emp_01",
       name: "Pravanshu Samadhiya",
+      email: "employee@staffsync.com",
+      role: "Employee",
       department: "Engineering",
     },
     date: new Date().toISOString(),
@@ -227,7 +238,7 @@ export const handleMockRequest = (config) => {
     users.push(newUser);
     setStore("users", users);
 
-    // If Employee, create employee profile record
+    // If Employee, create employee profile record so HR sees them immediately
     if (newUser.role === "Employee") {
       const employees = getStore("employees", SEED_EMPLOYEES);
       employees.push({
@@ -295,17 +306,22 @@ export const handleMockRequest = (config) => {
     };
   }
 
-  // 4. LEAVES
+  // 4. LEAVES (Both HR and Manager can view all, approve, or reject)
   if (url.includes("/api/leaves")) {
     let leaves = getStore("leaves", SEED_LEAVES);
 
     if (method === "GET") {
       if (url.includes("/my-leaves")) {
-        const myLeaves = leaves.filter(
-          (l) => l.user?._id === currentUser?._id || l.user?.email === currentUser?.email
-        );
+        const myLeaves = leaves.filter((l) => {
+          const lId = l.user?._id;
+          const lEmail = l.user?.email?.toLowerCase();
+          const curId = currentUser?._id;
+          const curEmail = currentUser?.email?.toLowerCase();
+          return (curId && lId === curId) || (curEmail && lEmail === curEmail);
+        });
         return { status: 200, data: myLeaves };
       }
+      // Both HR and Manager get ALL company leaves
       return { status: 200, data: leaves };
     }
 
@@ -313,14 +329,17 @@ export const handleMockRequest = (config) => {
       const newLeave = {
         _id: "leave_" + Date.now(),
         user: {
-          _id: currentUser?._id || "demo_emp_01",
+          _id: currentUser?._id || "user_" + Date.now(),
           name: currentUser?.name || "Employee",
+          email: currentUser?.email || "employee@staffsync.com",
           department: currentUser?.department || "Engineering",
+          role: currentUser?.role || "Employee",
         },
         startDate: body.startDate,
         endDate: body.endDate,
         reason: body.reason,
         status: "Pending",
+        reviewedBy: null,
         createdAt: new Date().toISOString(),
       };
       leaves.unshift(newLeave);
@@ -331,7 +350,18 @@ export const handleMockRequest = (config) => {
     if (method === "PUT" && url.includes("/status")) {
       const idMatch = url.match(/\/api\/leaves\/([^\/]+)\/status/);
       const leaveId = idMatch ? idMatch[1] : null;
-      leaves = leaves.map((l) => (l._id === leaveId ? { ...l, status: body.status } : l));
+      const reviewerName = currentUser?.name || "Admin";
+      const reviewerRole = currentUser?.role || "Manager";
+
+      leaves = leaves.map((l) =>
+        l._id === leaveId
+          ? {
+              ...l,
+              status: body.status,
+              reviewedBy: `${reviewerName} (${reviewerRole})`,
+            }
+          : l
+      );
       setStore("leaves", leaves);
       const updated = leaves.find((l) => l._id === leaveId);
       return { status: 200, data: updated || {} };
@@ -344,9 +374,13 @@ export const handleMockRequest = (config) => {
 
     if (method === "GET") {
       if (url.includes("/my-attendance")) {
-        const myAtt = attendance.filter(
-          (a) => a.user?._id === currentUser?._id || a.user?.email === currentUser?.email
-        );
+        const myAtt = attendance.filter((a) => {
+          const aId = a.user?._id;
+          const aEmail = a.user?.email?.toLowerCase();
+          const curId = currentUser?._id;
+          const curEmail = currentUser?.email?.toLowerCase();
+          return (curId && aId === curId) || (curEmail && aEmail === curEmail);
+        });
         return { status: 200, data: myAtt };
       }
       return { status: 200, data: attendance };
@@ -357,8 +391,9 @@ export const handleMockRequest = (config) => {
       const record = {
         _id: "att_" + Date.now(),
         user: {
-          _id: currentUser?._id || "demo_emp_01",
+          _id: currentUser?._id || "user_" + Date.now(),
           name: currentUser?.name || "Employee",
+          email: currentUser?.email || "employee@staffsync.com",
           department: currentUser?.department || "Engineering",
         },
         date: new Date().toISOString(),
@@ -438,7 +473,7 @@ export const handleMockRequest = (config) => {
     }
   }
 
-  // 7. ANNOUNCEMENTS
+  // 7. ANNOUNCEMENTS (Created by either HR or Manager, visible to all)
   if (url.includes("/api/announcements")) {
     let announcements = getStore("announcements", SEED_ANNOUNCEMENTS);
 
@@ -452,7 +487,10 @@ export const handleMockRequest = (config) => {
         title: body.title,
         message: body.message,
         targetRole: body.targetRole || "All",
-        postedBy: { name: currentUser?.name || "HR Admin", role: currentUser?.role || "HR" },
+        postedBy: {
+          name: currentUser?.name || (currentUser?.role === "Manager" ? "Manager" : "HR Admin"),
+          role: currentUser?.role || "HR",
+        },
         createdAt: new Date().toISOString(),
       };
       announcements.unshift(newAnn);

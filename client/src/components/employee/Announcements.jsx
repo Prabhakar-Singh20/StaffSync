@@ -42,28 +42,41 @@ const Announcements = () => {
           <p style={{ color: '#9ca3af', fontSize: '0.9rem' }}>No announcements available.</p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {announcements.map((item) => (
-              <div
-                key={item._id}
-                style={{
-                  background: '#1f2937',
-                  border: '1px solid #374151',
-                  borderRadius: '8px',
-                  padding: '16px',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                  <h4 style={{ fontSize: '0.95rem', fontWeight: '600', color: '#f3f4f6' }}>{item.title}</h4>
-                  <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
-                    {new Date(item.createdAt).toLocaleDateString()}
-                  </span>
+            {announcements.map((item) => {
+              const authorName = item.postedBy?.name || 'Management';
+              const authorRole = item.postedBy?.role || 'Admin';
+
+              return (
+                <div
+                  key={item._id}
+                  style={{
+                    background: '#1f2937',
+                    border: '1px solid #374151',
+                    borderRadius: '8px',
+                    padding: '16px',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <h4 style={{ fontSize: '0.98rem', fontWeight: '600', color: '#f3f4f6' }}>{item.title}</h4>
+                    <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
+                      {new Date(item.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <p style={{ fontSize: '0.88rem', color: '#d1d5db', lineHeight: '1.5' }}>{item.message}</p>
+                  <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.78rem', color: '#9ca3af' }}>
+                    <span>
+                      Posted by: <strong style={{ color: '#60a5fa' }}>{authorName}</strong>{' '}
+                      <span className="badge badge-role" style={{ fontSize: '0.7rem', padding: '2px 8px' }}>
+                        {authorRole}
+                      </span>
+                    </span>
+                    <span className="badge badge-role" style={{ fontSize: '0.7rem' }}>
+                      Audience: {item.targetRole || 'All'}
+                    </span>
+                  </div>
                 </div>
-                <p style={{ fontSize: '0.86rem', color: '#d1d5db', lineHeight: '1.5' }}>{item.message}</p>
-                <div style={{ marginTop: '10px', fontSize: '0.75rem', color: '#6b7280' }}>
-                  Posted by: {item.postedBy?.name || 'Management'}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

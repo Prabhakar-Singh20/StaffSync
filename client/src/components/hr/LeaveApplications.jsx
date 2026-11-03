@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Check, X, Calendar, User, Clock, AlertCircle } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 const LeaveApplications = () => {
+  const { user } = useAuth();
   const [leaves, setLeaves] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('All');
@@ -29,7 +31,7 @@ const LeaveApplications = () => {
     setError('');
     try {
       await axios.put(`/api/leaves/${id}/status`, { status: newStatus });
-      setMsg(`Leave application marked as ${newStatus}`);
+      setMsg(`Leave application marked as ${newStatus} by ${user?.name || user?.role || 'you'}`);
       fetchLeaves();
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to update leave status');
@@ -44,9 +46,14 @@ const LeaveApplications = () => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-        <h3 style={{ fontSize: '1.2rem', fontWeight: '700', color: '#ffffff' }}>
-          Leave Applications ({leaves.length})
-        </h3>
+        <div>
+          <h3 style={{ fontSize: '1.2rem', fontWeight: '700', color: '#ffffff' }}>
+            Leave Applications ({leaves.length})
+          </h3>
+          <p style={{ fontSize: '0.82rem', color: '#9ca3af', marginTop: '2px' }}>
+            Reviewed by both HR Admins & Managers
+          </p>
+        </div>
 
         <div style={{ display: 'flex', gap: '8px' }}>
           {['All', 'Pending', 'Approved', 'Rejected'].map((st) => (
@@ -97,11 +104,20 @@ const LeaveApplications = () => {
                 filteredLeaves.map((l) => {
                   const s = new Date(l.startDate).toLocaleDateString();
                   const e = new Date(l.endDate).toLocaleDateString();
+                  const reviewer =
+                    typeof l.reviewedBy === 'object' && l.reviewedBy
+                      ? `${l.reviewedBy.name} (${l.reviewedBy.role})`
+                      : l.reviewedBy;
 
                   return (
                     <tr key={l._id}>
-                      <td style={{ fontWeight: '600', color: '#ffffff' }}>
-                        {l.user?.name || 'Unknown'}
+                      <td>
+                        <div style={{ fontWeight: '600', color: '#ffffff' }}>
+                          {l.user?.name || 'Unnamed Employee'}
+                        </div>
+                        {l.user?.email && (
+                          <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>{l.user.email}</span>
+                        )}
                       </td>
                       <td>
                         <span className="badge badge-role">{l.user?.department || 'General'}</span>
@@ -116,6 +132,11 @@ const LeaveApplications = () => {
                         <span className={`badge badge-${l.status.toLowerCase()}`}>
                           {l.status}
                         </span>
+                        {reviewer && l.status !== 'Pending' && (
+                          <div style={{ fontSize: '0.74rem', color: '#9ca3af', marginTop: '4px' }}>
+                            By: <span style={{ color: '#60a5fa' }}>{reviewer}</span>
+                          </div>
+                        )}
                       </td>
                       <td>
                         {l.status === 'Pending' ? (
@@ -123,20 +144,20 @@ const LeaveApplications = () => {
                             <button
                               onClick={() => handleStatusUpdate(l._id, 'Approved')}
                               className="btn btn-success btn-sm"
-                              title="Approve"
+                              title="Approve Leave"
                             >
                               <Check size={14} /> Approve
                             </button>
                             <button
                               onClick={() => handleStatusUpdate(l._id, 'Rejected')}
                               className="btn btn-danger btn-sm"
-                              title="Reject"
+                              title="Reject Leave"
                             >
                               <X size={14} /> Reject
                             </button>
                           </div>
                         ) : (
-                          <span style={{ fontSize: '0.8rem', color: '#6b7280' }}>Reviewed</span>
+                          <span style={{ fontSize: '0.8rem', color: '#6b7280' }}>Completed</span>
                         )}
                       </td>
                     </tr>

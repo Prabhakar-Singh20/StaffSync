@@ -2,7 +2,7 @@ const LeaveRequest = require("../models/LeaveRequest");
 
 // @desc    Apply for a leave
 // @route   POST /api/leaves
-// @access  Private (Employee)
+// @access  Private (All authenticated roles)
 const applyLeave = async (req, res) => {
   try {
     const { startDate, endDate, reason } = req.body;
@@ -19,10 +19,8 @@ const applyLeave = async (req, res) => {
       status: "Pending",
     });
 
-    const populatedLeave = await LeaveRequest.findById(leave._id).populate(
-      "user",
-      "name email department"
-    );
+    const populatedLeave = await LeaveRequest.findById(leave._id)
+      .populate("user", "name email department role");
 
     res.status(201).json(populatedLeave);
   } catch (error) {
@@ -32,33 +30,35 @@ const applyLeave = async (req, res) => {
 
 // @desc    Get current user's leaves
 // @route   GET /api/leaves/my-leaves
-// @access  Private (Employee)
+// @access  Private
 const getMyLeaves = async (req, res) => {
   try {
     const leaves = await LeaveRequest.find({ user: req.user._id })
       .sort({ createdAt: -1 })
-      .populate("user", "name email department");
+      .populate("user", "name email department role")
+      .populate("reviewedBy", "name role");
     res.json(leaves);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
-// @desc    Get all leave requests (Company-wide)
+// @desc    Get all leave requests (Company-wide: visible to both HR and Manager)
 // @route   GET /api/leaves
 // @access  Private (HR, Manager)
 const getAllLeaves = async (req, res) => {
   try {
     const leaves = await LeaveRequest.find()
       .sort({ createdAt: -1 })
-      .populate("user", "name email department");
+      .populate("user", "name email department role")
+      .populate("reviewedBy", "name role");
     res.json(leaves);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
-// @desc    Update leave status (Approve / Reject)
+// @desc    Update leave status (Approve / Reject: accessible by both HR and Manager)
 // @route   PUT /api/leaves/:id/status
 // @access  Private (HR, Manager)
 const updateLeaveStatus = async (req, res) => {
@@ -79,10 +79,9 @@ const updateLeaveStatus = async (req, res) => {
     leave.reviewedBy = req.user._id;
 
     const updatedLeave = await leave.save();
-    const populated = await LeaveRequest.findById(updatedLeave._id).populate(
-      "user",
-      "name email department"
-    );
+    const populated = await LeaveRequest.findById(updatedLeave._id)
+      .populate("user", "name email department role")
+      .populate("reviewedBy", "name role");
 
     res.json(populated);
   } catch (error) {

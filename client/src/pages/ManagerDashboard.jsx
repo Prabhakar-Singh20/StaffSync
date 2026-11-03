@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import LeaveApplications from '../components/manager/LeaveApplications';
 import TrainingManagement from '../components/manager/TrainingManagement';
-import { LogOut, Briefcase, ShieldCheck } from 'lucide-react';
+import AnnouncementsManager from '../components/hr/AnnouncementsManager';
+import { LogOut, Briefcase, ShieldCheck, Bell, BookOpen, Calendar } from 'lucide-react';
 
 const ManagerDashboard = () => {
   const { user, logout } = useAuth();
@@ -57,7 +58,7 @@ const ManagerDashboard = () => {
             Welcome Back, Manager
           </h2>
           <p style={{ color: '#9ca3af', fontSize: '0.9rem', marginTop: '4px' }}>
-            Review pending leave requests and manage workforce training programs
+            Review pending leave requests, publish company announcements, and manage workforce training programs
           </p>
         </div>
 
@@ -76,11 +77,19 @@ const ManagerDashboard = () => {
           >
             Training & Development
           </button>
+
+          <button
+            onClick={() => setActiveTab('announcements')}
+            className={`tab-btn ${activeTab === 'announcements' ? 'active' : ''}`}
+          >
+            Announcements
+          </button>
         </div>
 
         {/* Tab Components */}
         {activeTab === 'leaves' && <LeaveApplications />}
         {activeTab === 'trainings' && <TrainingManagement />}
+        {activeTab === 'announcements' && <AnnouncementsManager />}
       </main>
     </div>
   );
