@@ -4,33 +4,69 @@ import { handleMockRequest, initMockStore } from '../services/mockEngine';
 
 const AuthContext = createContext();
 
-// Initialize the in-browser HRM database for standalone/Vercel environments
+// Initialize in-browser HRM storage for Vercel/standalone environments
 initMockStore();
 
-// Setup Axios request interceptor to always attach token synchronously
+// Setup Axios request interceptor:
+// 1. Synchronously attaches Bearer token to all requests.
+// 2. On Vercel (or static hosting without a Node server), uses the in-browser HRM engine adapter directly.
 axios.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('staffsync_token');
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`;
     }
+
+    const isStaticDeploy =
+      typeof window !== 'undefined' &&
+      (window.location.hostname.includes('vercel.app') ||
+       window.location.hostname.includes('github.io') ||
+       window.location.hostname.includes('netlify.app'));
+
+    // On Vercel/static deploys without an external backend, route directly to the in-browser HRM engine
+    // to completely prevent Vercel's "405 Method Not Allowed" on POST requests
+    if (isStaticDeploy && !import.meta.env.VITE_API_BASE_URL) {
+      config.adapter = async (cfg) => {
+        try {
+          const mockRes = handleMockRequest(cfg);
+          if (mockRes) {
+            return {
+              data: mockRes.data,
+              status: mockRes.status || 200,
+              statusText: 'OK',
+              headers: {},
+              config: cfg,
+            };
+          }
+          const err = new Error('Not found');
+          err.response = { status: 404, data: { message: 'Not found' } };
+          throw err;
+        } catch (err) {
+          throw err;
+        }
+      };
+    }
+
     return config;
   },
   (error) => Promise.reject(error)
 );
 
-// Setup Axios response interceptor: if deployed on Vercel (where no Node backend exists, returning 404 or network error),
-// seamlessly fall back to the in-browser HRM engine so registration, login, and all dashboard actions work flawlessly!
+// Safety net response interceptor: catches 404, 405 (Method Not Allowed), 502, 504, or Network Errors
 axios.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const isOfflineOrVercel =
+    const status = error.response?.status;
+    const isUnreachable =
       !error.response ||
-      error.response.status === 404 ||
-      error.response.status === 504 ||
+      status === 404 ||
+      status === 405 ||
+      status === 500 ||
+      status === 502 ||
+      status === 504 ||
       error.code === 'ERR_NETWORK';
 
-    if (isOfflineOrVercel && error.config) {
+    if (isUnreachable && error.config) {
       try {
         const mockRes = handleMockRequest(error.config);
         if (mockRes) {
